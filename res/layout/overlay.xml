@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="fill_parent"
+    android:layout_height="fill_parent"
+    android:background="@color/transparent"
+    android:gravity="right" >
+
+    <ImageButton
+        android:id="@+id/left_dummy"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="25dp"
+        android:layout_toRightOf="@+id/animation_spacer_left"
+        android:background="@color/transparent"
+        android:paddingBottom="10dp"
+        android:paddingTop="10dp"
+        android:src="@drawable/left" />
+
+    <RelativeLayout
+        android:id="@+id/overlay_main"
+        android:layout_width="fill_parent"
+        android:layout_height="fill_parent"
+        android:layout_gravity="right|center_vertical"
+        android:layout_marginBottom="25dp"
+        android:layout_marginTop="25dp"
+        android:layout_toRightOf="@+id/left_dummy"
+        android:background="@drawable/ui"
+        android:paddingBottom="10dp"
+        android:paddingRight="10dp"
+        android:paddingTop="0dp" >
+
+        <RelativeLayout
+            android:id="@+id/overlay_header"
+            android:layout_width="fill_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal" >
+
+            <ImageButton
+                android:id="@+id/button_right"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_alignParentLeft="true"
+                android:layout_centerVertical="true"
+                android:background="@color/transparent"
+                android:paddingBottom="10dp"
+                android:paddingRight="10dp"
+                android:paddingTop="10dp"
+                android:src="@drawable/right" />
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_alignParentRight="true"
+                android:layout_centerVertical="true"
+                android:gravity="center_vertical"
+                android:orientation="horizontal" >
+
+                <ImageButton
+                    android:id="@+id/button_clear"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginRight="10dp"
+                    android:background="@drawable/overlay_button"
+                    android:src="@drawable/clear" />
+
+                <ImageButton
+                    android:id="@+id/button_record"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginRight="10dp"
+                    android:background="@drawable/overlay_button"
+                    android:src="@drawable/record" />
+            </LinearLayout>
+        </RelativeLayout>
+
+        <View
+            android:id="@+id/spacer"
+            android:layout_width="fill_parent"
+            android:layout_height="1dp"
+            android:layout_below="@+id/overlay_header"
+            android:layout_marginLeft="10dp"
+            android:background="#89c15a" />
+
+        <ListView
+            android:id="@+id/overlay_recordings"
+            android:layout_width="fill_parent"
+            android:layout_height="wrap_content"
+            android:layout_below="@+id/spacer"
+            android:layout_marginLeft="10dp"
+            android:cacheColorHint="@color/transparent"
+            android:paddingTop="1dp" >
+        </ListView>
+
+        <at.neiti.scribblesmart.ui.NotesView
+            android:id="@+id/overlay_view"
+            android:layout_width="fill_parent"
+            android:layout_height="fill_parent"
+            android:layout_below="@+id/overlay_recordings"
+            android:layout_marginTop="5dp" />
+
+        <include layout="@layout/record_dialog" />
+    </RelativeLayout>
+
+</RelativeLayout>

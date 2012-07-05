@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ViewFlipper xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/main"
+    android:layout_width="fill_parent"
+    android:layout_height="fill_parent"
+    android:background="@drawable/ui"
+    android:inAnimation="@animator/in_from_right"
+    android:outAnimation="@animator/out_to_left" >
+
+    <include layout="@layout/main_overview" />
+
+    <include layout="@layout/main_detail" />
+
+    <include layout="@layout/main_about" />
+
+</ViewFlipper>

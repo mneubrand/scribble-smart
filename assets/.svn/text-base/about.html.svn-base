@@ -1,0 +1,25 @@
+<html>
+<head>
+  <style type="text/css">
+    body {
+      line-height: 1.5em;
+    }
+  
+    a {
+      color: #87be59;
+    }
+  </style>
+</head>
+<body>
+  <p>
+    Scribble Smart was developed for the <a href="#" onclick="android.openURL('http://devcup.evernote.com/')">Evernote Devcup</a> and is still under development.
+  </p>
+  
+  <p>Do you have suggestions or an idea for a new killer feature? Other questions or feedback?</p>
+  
+  <p>E-mail me at <a href="#" onclick="android.openEmail('scribble@neiti.at')">scribble@neiti.at</a> or leave feedback in the <a href="#" onclick="android.openMarket()">Android Market</a>.</p>
+  
+  <p>This complete app will be made available under Apache License at <a <a href="#" onclick="android.openURL('https://github.com/mneubrand/scribble-smart')">https://github.com/mneubrand/scribble-smart</a> once the judging period of the Evernote Devcup starts.</p> 
+  
+</body>
+</html>

@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android" >
+
+    <PreferenceCategory
+        android:summary="Username and password information"
+        android:title="Login information" >
+
+        <CheckBoxPreference
+            android:key="PREF_SCRIBBLE_SMART"
+            android:summary="Automatically start Scribble Smart when receiving calls"
+            android:title="Enable Scribble Smart" />
+        
+        <CheckBoxPreference
+            android:key="PREF_SPEAKER_PHONE"
+            android:summary="Automatically enables the speakerphone when opening Scribble Smart"
+            android:title="Automatic speakerphone" />
+        
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="Evernote" >
+
+        <CheckBoxPreference
+            android:key="PREF_EVERNOTE"
+            android:summary="Enables automatic synchronization with Evernote"
+            android:title="Evernote synchronization" />
+        
+        <at.neiti.scribblesmart.ui.AuthenticationPreference
+            android:id="@+id/authentication"
+            android:key="PREF_REAUTHENTICATE"
+            android:title="Validate authentication" />
+
+    </PreferenceCategory>
+
+</PreferenceScreen>

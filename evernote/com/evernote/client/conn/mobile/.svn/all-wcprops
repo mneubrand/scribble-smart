@@ -1,0 +1,29 @@
+K 25
+svn:wc:ra_dav:version-url
+V 91
+/svn/scribblesmart/!svn/ver/30/trunk/ScribbleSmart/evernote/com/evernote/client/conn/mobile
+END
+FileDataException.java
+K 25
+svn:wc:ra_dav:version-url
+V 114
+/svn/scribblesmart/!svn/ver/30/trunk/ScribbleSmart/evernote/com/evernote/client/conn/mobile/FileDataException.java
+END
+TEvernoteHttpClient.java
+K 25
+svn:wc:ra_dav:version-url
+V 116
+/svn/scribblesmart/!svn/ver/30/trunk/ScribbleSmart/evernote/com/evernote/client/conn/mobile/TEvernoteHttpClient.java
+END
+DiskBackedByteStore.java
+K 25
+svn:wc:ra_dav:version-url
+V 116
+/svn/scribblesmart/!svn/ver/30/trunk/ScribbleSmart/evernote/com/evernote/client/conn/mobile/DiskBackedByteStore.java
+END
+FileData.java
+K 25
+svn:wc:ra_dav:version-url
+V 105
+/svn/scribblesmart/!svn/ver/30/trunk/ScribbleSmart/evernote/com/evernote/client/conn/mobile/FileData.java
+END

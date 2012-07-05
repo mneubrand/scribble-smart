@@ -1,0 +1,2 @@
+for i in `ls drawable-hdpi/`; do convert drawable-hdpi/$i -resize 48x48 drawable-mdpi/$i; done
+for i in `ls drawable-hdpi/`; do convert drawable-hdpi/$i -resize 36x36 drawable-ldpi/$i; done

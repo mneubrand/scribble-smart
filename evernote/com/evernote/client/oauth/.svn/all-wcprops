@@ -1,0 +1,29 @@
+K 25
+svn:wc:ra_dav:version-url
+V 85
+/svn/scribblesmart/!svn/ver/30/trunk/ScribbleSmart/evernote/com/evernote/client/oauth
+END
+AccessTokenExtractor.java
+K 25
+svn:wc:ra_dav:version-url
+V 111
+/svn/scribblesmart/!svn/ver/30/trunk/ScribbleSmart/evernote/com/evernote/client/oauth/AccessTokenExtractor.java
+END
+EvernoteApi.java
+K 25
+svn:wc:ra_dav:version-url
+V 102
+/svn/scribblesmart/!svn/ver/30/trunk/ScribbleSmart/evernote/com/evernote/client/oauth/EvernoteApi.java
+END
+EvernoteSandboxApi.java
+K 25
+svn:wc:ra_dav:version-url
+V 109
+/svn/scribblesmart/!svn/ver/30/trunk/ScribbleSmart/evernote/com/evernote/client/oauth/EvernoteSandboxApi.java
+END
+EvernoteAuthToken.java
+K 25
+svn:wc:ra_dav:version-url
+V 108
+/svn/scribblesmart/!svn/ver/30/trunk/ScribbleSmart/evernote/com/evernote/client/oauth/EvernoteAuthToken.java
+END

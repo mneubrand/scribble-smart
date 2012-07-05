@@ -1,0 +1,650 @@
+package at.neiti.scribblesmart.overlay;
+
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.lang.Thread.UncaughtExceptionHandler;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
+import org.acra.collector.CrashReportData;
+import org.acra.collector.CrashReportDataFactory;
+import org.acra.sender.GoogleFormSender;
+import org.acra.util.ReportUtils;
+
+import android.app.Notification;
+import android.app.PendingIntent;
+import android.app.Service;
+import android.content.Context;
+import android.content.Intent;
+import android.content.SharedPreferences;
+import android.content.SharedPreferences.Editor;
+import android.graphics.Bitmap;
+import android.graphics.PixelFormat;
+import android.media.AudioManager;
+import android.os.Handler;
+import android.os.IBinder;
+import android.os.PowerManager;
+import android.os.PowerManager.WakeLock;
+import android.preference.PreferenceManager;
+import android.telephony.TelephonyManager;
+import android.text.format.Time;
+import android.util.Log;
+import android.view.Gravity;
+import android.view.LayoutInflater;
+import android.view.MotionEvent;
+import android.view.View;
+import android.view.View.OnClickListener;
+import android.view.View.OnTouchListener;
+import android.view.WindowManager;
+import android.view.WindowManager.LayoutParams;
+import android.widget.ImageButton;
+import android.widget.ListView;
+import android.widget.RelativeLayout;
+import at.neiti.scribblesmart.NoteUtils;
+import at.neiti.scribblesmart.R;
+import at.neiti.scribblesmart.RecordInfo;
+import at.neiti.scribblesmart.main.ScribbleSmartActivity;
+import at.neiti.scribblesmart.main.SettingsActivity;
+import at.neiti.scribblesmart.ui.NotesView;
+
+import com.evernote.client.oauth.android.SaveService;
+
+/**
+ * Service displaying an overlay window for taking notes. Displayed on top of
+ * other applications/activities
+ * 
+ * @author markus
+ * 
+ */
+public class NotesOverlayService extends Service implements OnClickListener,
+        UncaughtExceptionHandler, OnTouchListener {
+
+    public static final String PREF_NOTE_PREFIX = "PREF_NOTE_PREFIX_";
+    public static final String PREF_NOTE_GUID_SUFFIX = "_GUID";
+
+    private static String TAG = "IncomingService";
+
+    private static final int NOTIFICATION_ID = 1;
+
+    private RelativeLayout mainView;
+    private LayoutParams leftParams;
+    private LayoutParams mainParams;
+
+    private String incomingNumber;
+
+    private ImageButton buttonRight;
+    private RelativeLayout headerRight;
+    private ImageButton buttonLeft;
+
+    private ImageButton buttonClear;
+    private ImageButton buttonRecord;
+
+    private NotesView notesView;
+
+    private boolean audioDialogActive;
+    private AudioRecorder audioRecorder;
+    private ListView recordings;
+
+    private static NotesOverlayService instance;
+
+    // Indicates if the note has been modified by either drawing or
+    // adding/removing recordings
+    private boolean modified;
+
+    // Indicates if the NotesView is open (overlay shown)
+    private boolean active;
+
+    private boolean moving;
+
+    // Indicates that the service should stop itself when the NotesView gets
+    // closed
+    private boolean shouldStop;
+
+    private Map<String, String> info;
+
+    private boolean enableSpeakerPhone;
+    private boolean speakerPhonePreviouslyEnabled;
+
+    private UncaughtExceptionHandler previousHandler;
+    private Handler handler;
+
+    private float startX;
+    private WakeLock wakeLock;
+    private int oldVolume;
+
+    @Override
+    public IBinder onBind(Intent intent) {
+        return null;
+    }
+
+    @Override
+    public void onCreate() {
+        super.onCreate();
+        instance = this;
+
+        // Set UncaughtExceptionHandler so we can handle all errors ourselves
+        previousHandler = Thread.getDefaultUncaughtExceptionHandler();
+        Thread.setDefaultUncaughtExceptionHandler(this);
+    }
+
+    @Override
+    public int onStartCommand(Intent intent, int flags, int startId) {
+        super.onStartCommand(intent, flags, startId);
+
+        handler = new Handler();
+
+        // Check preferences
+        SharedPreferences settings = PreferenceManager
+                .getDefaultSharedPreferences(this);
+        enableSpeakerPhone = settings.getBoolean(
+                SettingsActivity.PREF_SPEAKER_PHONE, false);
+
+        // Remember incoming number
+        this.incomingNumber = intent
+                .getStringExtra(TelephonyManager.EXTRA_INCOMING_NUMBER);
+
+        // Load existing notes
+        if (incomingNumber != null) {
+            this.info = NoteUtils.getNoteInfo(this, PREF_NOTE_PREFIX
+                    + incomingNumber);
+        }
+
+        // Initialize UI
+        if (mainView == null) {
+            initializeUI();
+            addNotification();
+        }
+
+        return START_NOT_STICKY;
+    }
+
+    /**
+     * Display notification indicating that Scribble Smart is running
+     */
+    private void addNotification() {
+        // Instantiate the Notification:
+        int icon = R.drawable.notification;
+        CharSequence tickerText = "Scribble Smart";
+        long when = System.currentTimeMillis();
+
+        Notification notification = new Notification(icon, tickerText, when);
+        notification = new Notification(icon, tickerText, when);
+
+        // Define the notification's message and PendingIntent:
+        Context context = getApplicationContext();
+        CharSequence contentTitle = "Scribble Smart";
+        CharSequence contentText = "Select to configure Scribble Smart";
+        Intent notificationIntent = new Intent(this,
+                ScribbleSmartActivity.class);
+        PendingIntent contentIntent = PendingIntent.getActivity(this, 0,
+                notificationIntent, 0);
+        notification.setLatestEventInfo(context, contentTitle, contentText,
+                contentIntent);
+
+        startForeground(NOTIFICATION_ID, notification);
+    }
+
+    /**
+     * Initialize UI and add overlays to the WindowManager
+     */
+    private void initializeUI() {
+        if (mainView == null) {
+            LayoutInflater layoutInflater = (LayoutInflater) this
+                    .getSystemService(Context.LAYOUT_INFLATER_SERVICE);
+            WindowManager wm = (WindowManager) this
+                    .getSystemService(Context.WINDOW_SERVICE);
+
+            // Set type to phone and make it touchable. This window only blocks
+            // the size of the left button. Otherwise input to the whole screen
+            // would be captured
+            leftParams = new WindowManager.LayoutParams(
+                    WindowManager.LayoutParams.WRAP_CONTENT,
+                    WindowManager.LayoutParams.WRAP_CONTENT,
+                    WindowManager.LayoutParams.TYPE_PHONE,
+                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                            | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
+                            | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
+                            | WindowManager.LayoutParams.FLAG_DITHER,
+                    PixelFormat.TRANSLUCENT);
+            leftParams.gravity = Gravity.RIGHT | Gravity.TOP;
+            leftParams.y = 40; // I have no clue whatsoever why this offset is
+                               // correct?! Damn you WindowManager...
+
+            buttonLeft = (ImageButton) layoutInflater.inflate(
+                    R.layout.button_left, null);
+            buttonLeft.setOnTouchListener(this);
+            wm.addView(buttonLeft, leftParams);
+
+            mainView = (RelativeLayout) layoutInflater.inflate(
+                    R.layout.overlay, null);
+
+            buttonRight = (ImageButton) mainView
+                    .findViewById(R.id.button_right);
+            buttonRight.setOnTouchListener(this);
+
+            headerRight = (RelativeLayout) mainView
+                    .findViewById(R.id.overlay_header);
+            headerRight.setOnTouchListener(this);
+
+            buttonClear = (ImageButton) mainView
+                    .findViewById(R.id.button_clear);
+            buttonClear.setOnClickListener(this);
+            buttonRecord = (ImageButton) mainView
+                    .findViewById(R.id.button_record);
+            buttonRecord.setOnClickListener(this);
+
+            notesView = (NotesView) mainView.findViewById(R.id.overlay_view);
+            notesView.setService(this);
+
+            recordings = (ListView) mainView
+                    .findViewById(R.id.overlay_recordings);
+
+            List<RecordInfo> recordingInfos = new ArrayList<RecordInfo>();
+            if (this.info != null) {
+                recordingInfos = NoteUtils.loadNote(this, info, notesView,
+                        recordings);
+            }
+
+            audioRecorder = new AudioRecorder(this, mainView, recordingInfos);
+
+            NoteUtils.refreshRecordings(this, recordings,
+                    audioRecorder.getRecordings());
+
+            // The main window with all visible is FLAG_NOT_TOUCHABLE in the
+            // beginning only after the note view gets pulled up this gets
+            // changed
+            mainParams = new WindowManager.LayoutParams(
+                    WindowManager.LayoutParams.WRAP_CONTENT,
+                    WindowManager.LayoutParams.WRAP_CONTENT,
+                    WindowManager.LayoutParams.TYPE_PHONE,
+                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                            | WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+                            | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+                    PixelFormat.TRANSLUCENT);
+            mainParams.gravity = Gravity.LEFT | Gravity.TOP;
+            mainParams.x = wm.getDefaultDisplay().getWidth() - 68;
+            mainParams.width = wm.getDefaultDisplay().getWidth() + 68 - 25;
+            mainParams.height = wm.getDefaultDisplay().getHeight() - 25;
+
+            wm.addView(mainView, mainParams);
+        }
+    }
+
+    @Override
+    public void onClick(View v) {
+        if (moving || audioDialogActive) {
+            return;
+        }
+
+        if (buttonClear.equals(v)) {
+            Log.i(TAG, "Delete note");
+            this.notesView.clear();
+            this.setModified(true);
+        } else if (buttonRecord.equals(v)) {
+            Log.i(TAG, "Record audio");
+            showAudioDialog();
+        }
+    }
+
+    /**
+     * Show the audio dialog to record notes.
+     */
+    public void showAudioDialog() {
+        // Remember old volume of voice call and mute it
+        AudioManager audioManager = (AudioManager) this
+                .getSystemService(Context.AUDIO_SERVICE);
+        oldVolume = audioManager
+                .getStreamVolume(AudioManager.STREAM_VOICE_CALL);
+        audioManager.setStreamVolume(AudioManager.STREAM_VOICE_CALL, 0,
+                AudioManager.FLAG_ALLOW_RINGER_MODES
+                        | AudioManager.FLAG_REMOVE_SOUND_AND_VIBRATE);
+
+        audioRecorder.showAudioDialog();
+
+        // Block other UI elements
+        notesView.setEnabled(false);
+        mainView.invalidate();
+        audioDialogActive = true;
+
+    }
+
+    /**
+     * Called after the audio dialog is dismissed
+     */
+    public void dismissedAudioDialog() {
+        NoteUtils.refreshRecordings(this, recordings,
+                audioRecorder.getRecordings());
+
+        // Reenable other UI elements
+        notesView.setEnabled(true);
+        mainView.invalidate();
+        audioDialogActive = false;
+
+        // Set voice call stream back to old volume
+        AudioManager audioManager = (AudioManager) this
+                .getSystemService(Context.AUDIO_SERVICE);
+        audioManager.setStreamVolume(AudioManager.STREAM_VOICE_CALL, oldVolume,
+                AudioManager.FLAG_ALLOW_RINGER_MODES
+                        | AudioManager.FLAG_REMOVE_SOUND_AND_VIBRATE);
+    }
+
+    /**
+     * Display the overlay to create notes (slides in from the left)
+     */
+    private void showNoteView() {
+        Log.i(TAG, "Pull up note view");
+
+        // Acquire wake lock to prevent screen from going off
+        this.active = true;
+        PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
+        wakeLock = pm.newWakeLock(PowerManager.SCREEN_BRIGHT_WAKE_LOCK, TAG);
+        wakeLock.acquire();
+
+        // Make main UI window touchable
+        WindowManager wm = (WindowManager) this
+                .getSystemService(Context.WINDOW_SERVICE);
+        mainParams.flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS;
+        wm.updateViewLayout(mainView, mainParams);
+
+        // Post sliding animation
+        handler.post(new WindowAnimation(true));
+
+        // Enable speaker phone if it is enabled in the settings
+        if (enableSpeakerPhone) {
+            AudioManager audioManager = (AudioManager) this
+                    .getSystemService(Context.AUDIO_SERVICE);
+            speakerPhonePreviouslyEnabled = audioManager.isSpeakerphoneOn();
+            audioManager.setSpeakerphoneOn(true);
+        }
+    }
+
+    /**
+     * Hide the notes view (slides out to the right)
+     */
+    private void hideNoteView() {
+        Log.i(TAG, "Hide note view");
+
+        // Release wake lock if we hold it
+        this.active = false;
+        if (wakeLock.isHeld()) {
+            wakeLock.release();
+        }
+
+        // Make main UI window not touchable again
+        WindowManager wm = (WindowManager) this
+                .getSystemService(Context.WINDOW_SERVICE);
+        mainParams.flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                | WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+                | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS;
+        wm.updateViewLayout(mainView, mainParams);
+
+        // Post sliding animation
+        handler.post(new WindowAnimation(false));
+
+        // Stop the service if it previously received a command to do so
+        if (shouldStop) {
+            stopSelf();
+        }
+
+        // Set speaker phone state to the one before the notes view was
+        // displayed
+        if (enableSpeakerPhone) {
+            AudioManager audioManager = (AudioManager) this
+                    .getSystemService(Context.AUDIO_SERVICE);
+            audioManager.setSpeakerphoneOn(speakerPhonePreviouslyEnabled);
+        }
+    }
+
+    /**
+     * Save a note by saving the NotesView bitmap to a file and saving all its
+     * info to the preferences. If Evernote is enabled send an Intent to the
+     * SaveService to upload the note to Evernote
+     */
+    private void saveNote() {
+        // Save bitmap into temporary file
+        File file = null;
+        String drawing = UUID.randomUUID().toString();
+        try {
+            file = new File(getFilesDir(), drawing);
+            FileOutputStream out;
+            out = new FileOutputStream(file);
+            notesView.getDrawing()
+                    .compress(Bitmap.CompressFormat.PNG, 100, out);
+            out.flush();
+            out.close();
+        } catch (IOException e) {
+            Log.e(TAG, "Saving drawing to temp file failed", e);
+        }
+
+        RecordInfo[] infos = audioRecorder.getRecordings().toArray(
+                new RecordInfo[] {});
+
+        // Remember file paths of all media in settings
+        SharedPreferences settings = PreferenceManager
+                .getDefaultSharedPreferences(this);
+        Editor editor = settings.edit();
+        String prefTitle = null;
+        if (incomingNumber != null) {
+            prefTitle = NotesOverlayService.PREF_NOTE_PREFIX + incomingNumber;
+        } else {
+            prefTitle = NotesOverlayService.PREF_NOTE_PREFIX
+                    + UUID.randomUUID().toString();
+        }
+        editor.putString(prefTitle,
+                NoteUtils.createNoteInfo(this, incomingNumber, drawing, infos));
+        editor.commit();
+
+        // Start service for EverNote upload if enabled
+        boolean enableEvernote = settings.getBoolean(
+                SettingsActivity.PREF_EVERNOTE, false);
+        if (enableEvernote) {
+            Intent serviceIntent = new Intent(this, SaveService.class);
+            serviceIntent.setAction(SaveService.ACTION_UPLOAD);
+
+            serviceIntent.putExtra(SaveService.EXTRA_DRAWING, drawing);
+            serviceIntent.putExtra(SaveService.EXTRA_INCOMING, incomingNumber);
+            serviceIntent.putExtra(SaveService.EXTRA_PREF_TITLE, prefTitle);
+            serviceIntent.putExtra(SaveService.EXTRA_AUDIO, infos);
+            if (info != null) {
+                serviceIntent.putExtra(SaveService.EXTRA_NOTE_GUID,
+                        info.get(NoteUtils.NOTE_GUID));
+            }
+
+            startService(serviceIntent);
+        }
+    }
+
+    /**
+     * Static method to tell the service to stop itself from the
+     * IncomingCallReceiver
+     */
+    public static void stopInstance() {
+        if (instance != null) {
+            // If the NotesView is not displayed stop immediately otherwise
+            // schedule stop by setting shouldStop
+            if (!instance.active) {
+                instance.stop();
+            } else {
+                instance.shouldStop = true;
+            }
+        }
+    }
+
+    /**
+     * Force a stop of the application in case of an error
+     */
+    private void forceStop() {
+        try {
+            audioRecorder.stop();
+            if (isModified()) {
+                saveNote();
+            }
+
+            if (mainView != null) {
+                WindowManager wm = (WindowManager) this
+                        .getSystemService(Context.WINDOW_SERVICE);
+                try {
+                    wm.removeView(mainView);
+                    wm.removeView(buttonLeft);
+                } catch (Exception e) {
+                    // Do nothing
+                }
+                stopForeground(true);
+
+            }
+        } catch (Exception e) {
+            // Hide exception as this is a force close
+        } finally {
+            stopSelf();
+        }
+    }
+
+    /**
+     * Save note, remove windows and stop the service
+     */
+    private void stop() {
+        Log.i(TAG, "Stopping service");
+        audioRecorder.stop();
+        if (isModified()) {
+            saveNote();
+        }
+
+        if (mainView != null) {
+            WindowManager wm = (WindowManager) this
+                    .getSystemService(Context.WINDOW_SERVICE);
+            try {
+                wm.removeView(mainView);
+                wm.removeView(buttonLeft);
+            } catch (Exception e) {
+                // Do nothing
+            }
+            stopForeground(true);
+        }
+
+        stopSelf();
+    }
+
+    public boolean isModified() {
+        return modified;
+    }
+
+    public void setModified(boolean modified) {
+        this.modified = modified;
+    }
+
+    @Override
+    public void uncaughtException(Thread thread, Throwable ex) {
+        try {
+            // Log exception
+            Log.e(TAG, "Uncaught exception: " + ex);
+            ex.printStackTrace();
+
+            // Upload exception through ACRA
+            /*GoogleFormSender sender = new GoogleFormSender(
+                    "XXX");
+
+            Time time = new Time();
+            time.setToNow();
+            CrashReportDataFactory f = new CrashReportDataFactory(this,
+                    PreferenceManager.getDefaultSharedPreferences(this), time,
+                    ReportUtils.getCrashConfiguration(this));
+            CrashReportData data = f.createCrashData(ex, true);
+
+            sender.send(data);*/
+
+            previousHandler.uncaughtException(thread, ex);
+
+            forceStop();
+        } catch (Exception e) {
+            Log.e(TAG, "ERROR: ", e);
+        }
+    }
+
+    @Override
+    public boolean onTouch(View v, MotionEvent event) {
+        if (moving || audioDialogActive) {
+            return true;
+        }
+
+        // Support sliding as well as tapping for displaying/hiding the notes
+        // view
+        if (buttonLeft.equals(v)) {
+            if (event.getAction() == MotionEvent.ACTION_DOWN) {
+                startX = event.getX();
+            } else if (event.getAction() == MotionEvent.ACTION_DOWN
+                    || event.getAction() == MotionEvent.ACTION_CANCEL) {
+                if (event.getX() < startX) {
+                    showNoteView();
+                }
+            } else if (event.getAction() == MotionEvent.ACTION_UP) {
+                showNoteView();
+            }
+        } else if (buttonRight.equals(v)) {
+            if (event.getAction() == MotionEvent.ACTION_DOWN) {
+                startX = event.getX();
+            } else if (event.getAction() == MotionEvent.ACTION_MOVE
+                    || event.getAction() == MotionEvent.ACTION_CANCEL) {
+                if (event.getX() > startX) {
+                    hideNoteView();
+                }
+            } else if (event.getAction() == MotionEvent.ACTION_UP) {
+                hideNoteView();
+            }
+        } else if (headerRight.equals(v)) {
+            if (event.getAction() == MotionEvent.ACTION_DOWN) {
+                startX = event.getX();
+            } else if (event.getAction() == MotionEvent.ACTION_MOVE
+                    || event.getAction() == MotionEvent.ACTION_CANCEL) {
+                if (event.getX() > startX) {
+                    hideNoteView();
+                }
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Helper class for animating the slide-in slide-out animation of the notes
+     * view
+     * 
+     * @author markus
+     * 
+     */
+    private class WindowAnimation implements Runnable {
+
+        private boolean left;
+
+        public WindowAnimation(boolean left) {
+            this.left = left;
+        }
+
+        @Override
+        public void run() {
+            WindowManager wm = (WindowManager) NotesOverlayService.this
+                    .getSystemService(Context.WINDOW_SERVICE);
+
+            if (left) {
+                mainParams.x -= wm.getDefaultDisplay().getWidth() / 10;
+            } else {
+                mainParams.x += wm.getDefaultDisplay().getWidth() / 10;
+            }
+
+            if (left && mainParams.x <= -68 + 25) {
+                mainParams.x = -68 + 25;
+                wm.updateViewLayout(mainView, mainParams);
+            } else if (!left
+                    && mainParams.x >= wm.getDefaultDisplay().getWidth() - 68) {
+                mainParams.x = wm.getDefaultDisplay().getWidth() - 68;
+                wm.updateViewLayout(mainView, mainParams);
+            } else {
+                wm.updateViewLayout(mainView, mainParams);
+                handler.postDelayed(this, 16);
+            }
+        }
+    }
+
+}

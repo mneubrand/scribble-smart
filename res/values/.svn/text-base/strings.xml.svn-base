@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="app_name">Scribble Smart</string>
+    <string name="crash_toast">Scribble Smart has encountered an unexpected error. A report has been sent to the developer to help fix this issue</string>
+
+</resources>

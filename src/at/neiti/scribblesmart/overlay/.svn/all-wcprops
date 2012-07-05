@@ -1,0 +1,23 @@
+K 25
+svn:wc:ra_dav:version-url
+V 85
+/svn/scribblesmart/!svn/ver/30/trunk/ScribbleSmart/src/at/neiti/scribblesmart/overlay
+END
+NotesOverlayService.java
+K 25
+svn:wc:ra_dav:version-url
+V 110
+/svn/scribblesmart/!svn/ver/32/trunk/ScribbleSmart/src/at/neiti/scribblesmart/overlay/NotesOverlayService.java
+END
+AudioRecorder.java
+K 25
+svn:wc:ra_dav:version-url
+V 104
+/svn/scribblesmart/!svn/ver/32/trunk/ScribbleSmart/src/at/neiti/scribblesmart/overlay/AudioRecorder.java
+END
+IncomingCallReceiver.java
+K 25
+svn:wc:ra_dav:version-url
+V 111
+/svn/scribblesmart/!svn/ver/32/trunk/ScribbleSmart/src/at/neiti/scribblesmart/overlay/IncomingCallReceiver.java
+END
